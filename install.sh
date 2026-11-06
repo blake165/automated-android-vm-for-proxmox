@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="1.0.1"
+SCRIPT_VERSION="1.1.0"
 
 # ---------------------------------------------------------------- defaults ---
 VMID=""
@@ -29,8 +29,11 @@ ONBOOT=1
 START_AFTER=0
 ASSUME_YES=0
 
-# Bliss OS public images are paused upstream; this is the SourceForge archive.
-DEFAULT_ISO_URL="https://sourceforge.net/projects/blissos-x86/files/latest/download"
+# Bliss OS public images are paused upstream. There is deliberately no default
+# URL: SourceForge's "latest" link points at whatever was uploaded last, which
+# is a linux-surface FOSS build — no Play Services, no ARM translation layer,
+# and a kernel meant for Surface tablets. Pick a build explicitly.
+SF_PROJECT="https://sourceforge.net/projects/blissos-x86/files/"
 
 # ------------------------------------------------------------------- output ---
 if [[ -t 1 ]]; then
@@ -55,6 +58,26 @@ have_pkgs() {
   done
 }
 
+# Bliss encodes a lot in the ISO filename. Flag the choices that quietly break
+# mainstream app support, before the VM is built rather than after.
+warn_iso_name() {
+  local n=${1,,}
+  if [[ $n == *foss* ]]; then
+    warn "'foss' build: no Google Play Services. Apps needing GMS will fail."
+  fi
+  if [[ $n != *houdini* && $n != *libndk* ]]; then
+    warn "Filename names no ARM translation layer (houdini/libndk). ARM-only"
+    warn "apps may not run at all — check after install with: getprop | grep isa"
+  fi
+  if [[ $n == *surface* ]]; then
+    warn "'Surface' build: linux-surface kernel, meant for Surface hardware."
+  fi
+  if [[ $n == *-v14.* || $n == *-v15.* ]]; then
+    warn "Bliss 14/15 are Android 11/12. A 16.9.x build (Android 13) is newer."
+  fi
+  return 0
+}
+
 banner() {
   echo
   echo -e "${B}  ANDROID VM on PROXMOX VE${N}"
@@ -73,7 +96,7 @@ Usage: install.sh [options]
   --storage NAME       Storage for disk + EFI disk
   --iso-store NAME     Storage holding ISOs (directory-type, e.g. local)
   --iso-volid VOLID    Use an ISO already uploaded, e.g. local:iso/Bliss.iso
-  --iso-url URL        Download this ISO instead of the default archive
+  --iso-url URL        Direct .iso URL to download
   --bridge NAME        Network bridge   (default: ${BRIDGE})
   --vlan N             VLAN tag         (default: none)
   --nic MODEL          e1000 | virtio   (default: ${NIC_MODEL})
@@ -228,7 +251,7 @@ if [[ -z $ISO_VOLID ]]; then
   CHOICES+=("Download an ISO now")
 
   if (( ASSUME_YES )) && [[ -z $ISO_URL ]] && (( ${#EXISTING[@]} == 0 )); then
-    ISO_URL="$DEFAULT_ISO_URL"
+    die "No ISO on ${ISO_STORE} and none given. Pass --iso-url or --iso-volid."
   fi
 
   if [[ -n $ISO_URL ]]; then
@@ -240,10 +263,15 @@ if [[ -z $ISO_VOLID ]]; then
   if [[ $PICKED == "Download an ISO now" ]]; then
     echo
     warn "Bliss OS has paused official public images. The SourceForge archive"
-    warn "(Bliss 16.9 / Android 13) still downloads but gets no updates or support."
-    warn "Any other Android-x86 style ISO URL works here too."
+    warn "still downloads but gets no updates or support:"
+    warn "  ${SF_PROJECT}"
     echo
-    [[ -z $ISO_URL ]] && ask ISO_URL "ISO URL" "$DEFAULT_ISO_URL"
+    msg "For app compatibility pick an x86_64-v2 GApps build (16.9.x is newest)."
+    msg "Avoid 'foss' (no Play Services) and 'Surface' (Surface-hardware kernel)."
+    msg "Any other Android-x86 style ISO URL works here too."
+    echo
+    [[ -z $ISO_URL ]] && ask ISO_URL "Direct .iso URL" ""
+    [[ -n $ISO_URL ]] || die "No ISO URL given. Upload one through the Proxmox UI and re-run with --iso-volid."
 
     ISO_PATH_PROBE=$(pvesm path "${ISO_STORE}:iso/probe.iso" 2>/dev/null || true)
     ISO_DIR=""
@@ -280,6 +308,7 @@ if [[ -z $ISO_VOLID ]]; then
   fi
 fi
 ok "ISO: ${ISO_VOLID}"
+warn_iso_name "${ISO_VOLID##*/}"
 
 # ------------------------------------------------------------------ network ---
 hdr "Network and display"

@@ -39,13 +39,25 @@ Everything is promptable or flaggable, so it works unattended too:
 
 Bliss OS **paused official public image releases** while they rebuild their tree. The archived 16.9 builds (Android 13) on SourceForge still download but get no updates and no support, and they won't OTA to whatever ships next.
 
-So the script treats the ISO as an input, not a fixed URL:
+So the script treats the ISO as an input, with no default URL:
 
 1. If an ISO is already on your ISO storage, it offers it.
-2. Otherwise it downloads from the SourceForge archive (default), or any URL you pass with `--iso-url` — handy for Android-x86 community builds or a newer unofficial image.
+2. Otherwise it asks for a direct `.iso` URL (or take `--iso-url`) — any Android-x86 style image works.
 3. Already uploaded through the UI? `--iso-volid local:iso/Bliss-v16.9.7-x86_64-OFFICIAL-gapps.iso`
 
-Downloads are size- and ISO-9660-verified, so a SourceForge mirror error page can't silently become your boot media.
+**Which build to pick.** Bliss encodes this in the filename, and the wrong choice silently breaks app support:
+
+| In the filename | Means |
+|---|---|
+| `gapps` | Google Play Services included — what you want for mainstream apps |
+| `foss` | No Play Services; anything needing GMS fails |
+| `houdini` / `libndk` | ARM translation layer, required for ARM-only apps (most of the Play Store). Neither keyword means no bridge |
+| `Surface` | linux-surface kernel for Surface tablets — not what you want in a VM |
+| `x86_64-v2` / `-v3` | v3 needs AVX2; v2 is the safer choice |
+
+Aim for an **x86_64-v2 GApps 16.9.x** build. The script warns about each of these before it builds the VM. There's deliberately no default download URL, because SourceForge's "latest" link resolves to a Surface FOSS build that fails on all three counts.
+
+Downloads are size- and ISO-9660-verified, so a mirror error page can't silently become your boot media.
 
 ## Finishing the install
 
