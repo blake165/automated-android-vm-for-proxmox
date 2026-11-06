@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="1.1.0"
+SCRIPT_VERSION="1.1.1"
 
 # ---------------------------------------------------------------- defaults ---
 VMID=""
@@ -34,6 +34,7 @@ ASSUME_YES=0
 # is a linux-surface FOSS build — no Play Services, no ARM translation layer,
 # and a kernel meant for Surface tablets. Pick a build explicitly.
 SF_PROJECT="https://sourceforge.net/projects/blissos-x86/files/"
+SF_EXAMPLE="${SF_PROJECT}Official/BlissOS16/Gapps/Generic/Bliss-v16.9.7-x86_64-OFFICIAL-gapps-20241011.iso/download"
 
 # ------------------------------------------------------------------- output ---
 if [[ -t 1 ]]; then
@@ -269,6 +270,9 @@ if [[ -z $ISO_VOLID ]]; then
     msg "For app compatibility pick an x86_64-v2 GApps build (16.9.x is newest)."
     msg "Avoid 'foss' (no Play Services) and 'Surface' (Surface-hardware kernel)."
     msg "Any other Android-x86 style ISO URL works here too."
+    echo
+    msg "Known-good pick (16.9.7, Android 13, GApps, generic - not Surface):"
+    msg "  ${SF_EXAMPLE}"
     echo
     [[ -z $ISO_URL ]] && ask ISO_URL "Direct .iso URL" ""
     [[ -n $ISO_URL ]] || die "No ISO URL given. Upload one through the Proxmox UI and re-run with --iso-volid."
