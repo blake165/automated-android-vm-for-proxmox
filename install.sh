@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="1.1.1"
+SCRIPT_VERSION="1.1.3"
 
 # ---------------------------------------------------------------- defaults ---
 VMID=""
@@ -167,12 +167,18 @@ pick() { # pick VAR "Prompt" item1 item2 ...
   echo "  ${__prompt}"
   local i
   for i in "${!items[@]}"; do printf "    %2d) %s\n" "$((i+1))" "${items[$i]}"; done
-  local sel
+  # PICK_NO_DEFAULT=1 forces a deliberate answer, for choices where a reflexive
+  # Enter is expensive to undo (picking the wrong Android ISO means reinstalling).
+  local sel default_sel="1" hint="[1]"
+  if (( ${PICK_NO_DEFAULT:-0} )); then default_sel=""; hint="(1-${#items[@]})"; fi
   while :; do
-    read -r -p "  Choice [1]: " sel </dev/tty || sel=""
-    sel="${sel:-1}"
+    # A failed read (no tty, or stdin at EOF) must not spin: with no default
+    # there is nothing to fall back to, so stop and say what to do instead.
+    read -r -p "  Choice ${hint}: " sel </dev/tty \
+      || die "No terminal available to answer that. Re-run with explicit flags (--help)."
+    sel="${sel:-$default_sel}"
     [[ $sel =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= ${#items[@]} )) && break
-    warn "Pick a number between 1 and ${#items[@]}."
+    warn "Enter a number between 1 and ${#items[@]}."
   done
   printf -v "$__var" '%s' "${items[$((sel-1))]}"
 }
@@ -258,7 +264,7 @@ if [[ -z $ISO_VOLID ]]; then
   if [[ -n $ISO_URL ]]; then
     PICKED="Download an ISO now"
   else
-    pick PICKED "Which ISO?" "${CHOICES[@]}"
+    PICK_NO_DEFAULT=1 pick PICKED "Which ISO?" "${CHOICES[@]}"
   fi
 
   if [[ $PICKED == "Download an ISO now" ]]; then
