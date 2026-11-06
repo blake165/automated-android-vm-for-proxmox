@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.1"
 
 # ---------------------------------------------------------------- defaults ---
 VMID=""
@@ -43,6 +43,17 @@ ok()   { echo -e "  ${G}✔${N} $*"; }
 warn() { echo -e "  ${Y}!${N} $*"; }
 die()  { echo -e "  ${R}✘${N} $*" >&2; exit 1; }
 hdr()  { echo; echo -e "${B}── $* ──${N}"; }
+
+# True only if every named package is fully installed. 'dpkg -s' is not usable
+# here: it exits 0 for a package in "config-files" state (removed, not purged),
+# whose shared libraries are gone — which is exactly what makes qemu refuse to
+# start with "missing libraries for 'virtio-gl'".
+have_pkgs() {
+  local p
+  for p in "$@"; do
+    [[ $(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null) == installed ]] || return 1
+  done
+}
 
 banner() {
   echo
@@ -287,17 +298,25 @@ case "$VGA" in
 esac
 
 if [[ $VGA == virtio-gl ]]; then
-  if ! dpkg -s libgl1 libegl1 &>/dev/null; then
+  if have_pkgs libgl1 libegl1; then
+    ok "VirGL prerequisites present"
+  else
     msg "VirGL needs libgl1 and libegl1 on the host."
     if confirm "Install them now with apt?"; then
-      apt-get update -qq && apt-get install -y -qq libgl1 libegl1 >/dev/null
-      ok "Installed libgl1 libegl1"
+      # A broken extra repo (e.g. an enterprise repo with no subscription)
+      # makes 'update' exit non-zero; that must not abort the install.
+      apt-get update -qq || warn "apt-get update reported errors — continuing"
+      apt-get install -y -qq libgl1 libegl1 >/dev/null 2>&1 || true
+      if have_pkgs libgl1 libegl1; then
+        ok "Installed libgl1 libegl1"
+      else
+        warn "Install did not succeed — falling back to the 'std' display."
+        VGA="std"
+      fi
     else
       warn "Falling back to the 'std' display."
       VGA="std"
     fi
-  else
-    ok "VirGL prerequisites present"
   fi
 fi
 VGA_ARG="$VGA"
